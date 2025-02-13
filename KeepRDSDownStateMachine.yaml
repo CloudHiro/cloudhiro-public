@@ -1,0 +1,212 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Resources:
+  RDSEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: "RDSInstanceStartTrigger"
+      Description: "Triggers when an RDS instance is started due to exceeding max stop time"
+      EventPattern:
+        source:
+          - "aws.rds"
+        detail-type:
+          - "RDS DB Instance Event"
+        detail:
+          EventID:
+            - "RDS-EVENT-0154"
+      State: ENABLED
+      Targets:
+        - Arn: !Ref KeepRDSDownStateMachine
+          Id: "RDSStateMachineTarget"
+  
+  KeepRDSDownStateMachine:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      RoleArn: !GetAtt KeepRDSDownRole.Arn
+      DefinitionString:
+        Fn::Sub: |
+          {
+            "StartAt": "CheckRDSTags",
+            "States": {
+              "CheckRDSTags": {
+                "Type": "Task",
+                "Resource": "${CheckRDSTagsLambda.Arn}",
+                "ResultPath": "$.tagValue",
+                "Next": "CheckTagValue"
+              },
+              "CheckTagValue": {
+                "Type": "Choice",
+                "Choices": [
+                  {
+                    "Variable": "$.tagValue",
+                    "StringMatches": "max_up_*",
+                    "Next": "ExtractWaitTime"
+                  }
+                ],
+                "Default": "EndState"
+              },
+              "ExtractWaitTime": {
+                "Type": "Task",
+                "Resource": "${ExtractWaitTimeLambda.Arn}",
+                "ResultPath": "$.waitTime",
+                "Next": "WaitTime"
+              },
+              "WaitTime": {
+                "Type": "Wait",
+                "SecondsPath": "$.waitTime",
+                "Next": "ValidateRDSStatus"
+              },
+              "ValidateRDSStatus": {
+                "Type": "Task",
+                "Resource": "${ValidateRDSStatusLambda.Arn}",
+                "ResultPath": "$.isRunning",
+                "Next": "CheckRunningStatus"
+              },
+              "CheckRunningStatus": {
+                "Type": "Choice",
+                "Choices": [
+                  {
+                    "Variable": "$.isRunning",
+                    "BooleanEquals": true,
+                    "Next": "StopRDSInstance"
+                  }
+                ],
+                "Default": "EndState"
+              },
+              "StopRDSInstance": {
+                "Type": "Task",
+                "Resource": "${StopRDSInstanceLambda.Arn}",
+                "End": true
+              },
+              "EndState": {
+                "Type": "Pass",
+                "End": true
+              }
+            }
+          }
+  
+  KeepRDSDownRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service: "states.amazonaws.com"
+            Action: "sts:AssumeRole"
+      Policies:
+        - PolicyName: "StepFunctionPolicy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "lambda:InvokeFunction"
+                Resource: "*"
+  
+  CheckRDSTagsLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.9
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+
+          def lambda_handler(event, context):
+              client = boto3.client('rds')
+              db_instance_arn = event.get('detail', {}).get('SourceArn')
+              response = client.list_tags_for_resource(ResourceName=db_instance_arn)
+              tag_value = None
+              for tag in response.get('TagList', []):
+                  if tag.get('Key') == 'cloudhiro_rds_keep_down':
+                      tag_value = tag.get('Value')
+                      break
+              return {"tagValue": tag_value}
+  
+  ExtractWaitTimeLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.9
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        ZipFile: |
+          import json
+          import re
+
+            def lambda_handler(event, context):
+              tag_value = event.get('tagValue')
+              match = re.match(r"max_up_(\d+)([mh])", tag_value)
+              if match:
+                time_value = int(match.group(1))
+                unit = match.group(2)
+                seconds = time_value * 60 if unit == 'm' else time_value * 3600
+                return { "waitTime": seconds }
+              return { "waitTime": 1800 }  # Default to 30 minutes
+  
+  ValidateRDSStatusLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.9
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+
+          def lambda_handler(event, context):
+              client = boto3.client('rds')
+              db_instance_arn = event.get('detail', {}).get('SourceArn')
+              response = client.describe_db_instances(DBInstanceIdentifier=db_instance_arn)
+              status = response.get('DBInstances', [{}])[0].get('DBInstanceStatus')
+              return { "isRunning": status == "available" }
+  
+  StopRDSInstanceLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.9
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+
+          def lambda_handler(event, context):
+              client = boto3.client('rds')
+              db_instance_arn = event.get('detail', {}).get('SourceArn')
+              client.stop_db_instance(DBInstanceIdentifier=db_instance_arn)
+              return { "status": "Stopping RDS instance" }
+  
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service: "lambda.amazonaws.com"
+            Action: "sts:AssumeRole"
+      Policies:
+        - PolicyName: "LambdaPolicy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "rds:ListTagsForResource"
+                  - "rds:DescribeDBInstances"
+                  - "rds:StopDBInstance"
+                Resource: "*"
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogGroup"
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: "*"
