@@ -18,6 +18,26 @@ Resources:
       Targets:
         - Arn: !Ref KeepRDSDownStateMachine
           Id: "RDSStateMachineTarget"
+          RoleArn: !GetAtt EventBridgeInvokeRole.Arn
+
+  EventBridgeInvokeRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service: "events.amazonaws.com"
+            Action: "sts:AssumeRole"
+      Policies:
+        - PolicyName: "InvokeStepFunctions"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action: "states:StartExecution"
+                Resource: !Ref KeepRDSDownStateMachine
   
   KeepRDSDownStateMachine:
     Type: AWS::StepFunctions::StateMachine
@@ -118,14 +138,14 @@ Resources:
 
           def lambda_handler(event, context):
               client = boto3.client('rds')
-              db_instance_arn = event.get('detail', {}).get('SourceArn')
+              db_instance_arn = event.get('detail').get('SourceArn')
               response = client.list_tags_for_resource(ResourceName=db_instance_arn)
               tag_value = None
               for tag in response.get('TagList', []):
                   if tag.get('Key') == 'cloudhiro_rds_keep_down':
                       tag_value = tag.get('Value')
                       break
-              return {"tagValue": tag_value}
+              return tag_value
   
   ExtractWaitTimeLambda:
     Type: AWS::Lambda::Function
@@ -138,15 +158,15 @@ Resources:
           import json
           import re
 
-            def lambda_handler(event, context):
+          def lambda_handler(event, context):
               tag_value = event.get('tagValue')
               match = re.match(r"max_up_(\d+)([mh])", tag_value)
               if match:
                 time_value = int(match.group(1))
                 unit = match.group(2)
                 seconds = time_value * 60 if unit == 'm' else time_value * 3600
-                return { "waitTime": seconds }
-              return { "waitTime": 1800 }  # Default to 30 minutes
+                return seconds
+              return 1800  # Default to 30 minutes
   
   ValidateRDSStatusLambda:
     Type: AWS::Lambda::Function
@@ -161,10 +181,10 @@ Resources:
 
           def lambda_handler(event, context):
               client = boto3.client('rds')
-              db_instance_arn = event.get('detail', {}).get('SourceArn')
+              db_instance_arn = event.get('detail').get('SourceArn')
               response = client.describe_db_instances(DBInstanceIdentifier=db_instance_arn)
               status = response.get('DBInstances', [{}])[0].get('DBInstanceStatus')
-              return { "isRunning": status == "available" }
+              return status == "available"
   
   StopRDSInstanceLambda:
     Type: AWS::Lambda::Function
@@ -179,8 +199,8 @@ Resources:
 
           def lambda_handler(event, context):
               client = boto3.client('rds')
-              db_instance_arn = event.get('detail', {}).get('SourceArn')
-              client.stop_db_instance(DBInstanceIdentifier=db_instance_arn)
+              db_instance_id = event.get('detail').get('SourceIdentifier')
+              client.stop_db_instance(DBInstanceIdentifier=db_instance_id)
               return { "status": "Stopping RDS instance" }
   
   LambdaExecutionRole:
