@@ -30,8 +30,8 @@ Resources:
     NotifyLambda:
         Type: AWS::Lambda::Function
         Properties: 
-            Runtime: python3.8
-            Handler: lambda_function.lambda_handler
+            Runtime: python3.9
+            Handler: index.lambda_handler
             Role: !GetAtt NotifyLambdaRole.Arn
             Environment:
                 Variables:
@@ -43,12 +43,11 @@ Resources:
                 ZipFile: |
                     import json
                     import os
-                    import requests
+                    import urllib3
 
                     def lambda_handler(event, context):
-                    
+
                         urls = []
-                        # If OverrideUrl value is set in the lambda tags, add only that url to the list
                         if os.environ.get('OverrideUrl'):
                             urls = [os.environ.get('OverrideUrl')]
                         else:
@@ -60,16 +59,16 @@ Resources:
                             if os.environ.get('CloudHiroNotifyTeams'):
                                 urls.append(os.environ.get('CloudHiroNotifyTeams'))
 
-                        # If no url is set, return
                         if len(urls) == 0:
                             return
 
-                        # Get the message to send
-                        message = event.get('message', 'No message provided')
+                        message = event.get('notificationMessage', 'No message provided')
+                        http = urllib3.PoolManager()
 
-                        # Send the message to all the urls in the list
                         for url in urls:
-                            requests.post(url, json={'text': message})
+                            encoded_data = json.dumps({'text': message}).encode('utf-8')
+                            headers = {'Content-Type': 'application/json'}
+                            response = http.request('POST', url, body=encoded_data, headers=headers)
 
 
     NotifyLambdaRole:
@@ -96,5 +95,5 @@ Resources:
 
 Outputs:
     NotifyLambdaFunction:
-        Description: The ARN of the Lambda function
+        Description: The ARN of the Notify Lambda function
         Value: !GetAtt NotifyLambda.Arn
