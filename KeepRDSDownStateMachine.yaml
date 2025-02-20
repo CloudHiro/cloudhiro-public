@@ -1,4 +1,10 @@
 AWSTemplateFormatVersion: '2010-09-09'
+Description: "CloudFormation stack for a Step Function to keep an RDS instance down based on tags."
+
+Parameters:
+  NotifyLambdaArn:
+    Type: String
+    Description: "The ARN of the Notify Lambda function."
 
 Resources:
   RDSEventRule:
@@ -96,6 +102,18 @@ Resources:
               "StopRDSInstance": {
                 "Type": "Task",
                 "Resource": "${StopRDSInstanceLambda.Arn}",
+                "ResultPath": "$.notificationMessage",
+                "Catch": [
+                  {
+                    "ErrorEquals": ["States.ALL"],
+                    "Next": "SendNotification"
+                  }
+                ],
+                "Next": "SendNotification"
+              },
+              "SendNotification": {
+                "Type": "Task",
+                "Resource": "${NotifyLambdaArn}",
                 "End": true
               },
               "EndState": {
@@ -201,7 +219,8 @@ Resources:
               client = boto3.client('rds')
               db_instance_id = event.get('detail').get('SourceIdentifier')
               client.stop_db_instance(DBInstanceIdentifier=db_instance_id)
-              return { "status": "Stopping RDS instance" }
+              notification_message = f"Stopping RDS instance {db_instance_id} after exceeding max stop time"
+              return notification_message
   
   LambdaExecutionRole:
     Type: AWS::IAM::Role
