@@ -1,0 +1,100 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CloudFormation stack for a Lambda function to send notifications based on tags
+
+Parameters:
+    OverrideUrl:
+        Type: String
+        Description: URL to override notification destination
+        Default: ''
+    CloudHiroNotifySpace:
+        Type: String
+        Description: Google Space notification URL
+        Default: ''
+    CloudHiroNotifySlack:
+        Type: String
+        Description: Slack notification webhook URL
+        Default: ''
+    CloudHiroNotifyTeams:
+        Type: String
+        Description: Microsoft Teams notification webhook URL
+        Default: ''
+
+Conditions:
+    HasOverrideUrl: !Not [!Equals [!Ref OverrideUrl, '']]
+    HasCloudHiroNotifySpace: !Not [!Equals [!Ref CloudHiroNotifySpace, '']]
+    HasCloudHiroNotifySlack: !Not [!Equals [!Ref CloudHiroNotifySlack, '']]
+    HasCloudHiroNotifyTeams: !Not [!Equals [!Ref CloudHiroNotifyTeams, '']]
+
+
+Resources:
+    NotifyLambda:
+        Type: AWS::Lambda::Function
+        Properties: 
+            Runtime: python3.8
+            Handler: lambda_function.lambda_handler
+            Role: !GetAtt NotifyLambdaRole.Arn
+            Environment:
+                Variables:
+                    OverrideUrl: !If [HasOverrideUrl, !Ref OverrideUrl, ""]
+                    CloudHiroNotifySpace: !If [HasCloudHiroNotifySpace, !Ref CloudHiroNotifySpace, ""]
+                    CloudHiroNotifySlack: !If [HasCloudHiroNotifySlack, !Ref CloudHiroNotifySlack, ""]
+                    CloudHiroNotifyTeams: !If [HasCloudHiroNotifyTeams, !Ref CloudHiroNotifyTeams, ""]
+            Code: 
+                ZipFile: |
+                    import json
+                    import os
+                    import requests
+
+                    def lambda_handler(event, context):
+                    
+                        urls = []
+                        # If OverrideUrl value is set in the lambda tags, add only that url to the list
+                        if os.environ.get('OverrideUrl'):
+                            urls = [os.environ.get('OverrideUrl')]
+                        else:
+                            # add the urls that are set to the list
+                            if os.environ.get('CloudHiroNotifySpace'):
+                                urls.append(os.environ.get('CloudHiroNotifySpace'))
+                            if os.environ.get('CloudHiroNotifySlack'):
+                                urls.append(os.environ.get('CloudHiroNotifySlack'))
+                            if os.environ.get('CloudHiroNotifyTeams'):
+                                urls.append(os.environ.get('CloudHiroNotifyTeams'))
+
+                        # If no url is set, return
+                        if len(urls) == 0:
+                            return
+
+                        # Get the message to send
+                        message = event.get('message', 'No message provided')
+
+                        # Send the message to all the urls in the list
+                        for url in urls:
+                            requests.post(url, json={'text': message})
+
+
+    NotifyLambdaRole:
+        Type: AWS::IAM::Role
+        Properties:
+            AssumeRolePolicyDocument:
+                Version: "2012-10-17"
+                Statement:
+                    - Effect: "Allow"
+                      Principal:
+                          Service: "lambda.amazonaws.com"
+                      Action: "sts:AssumeRole"
+            Policies:
+                - PolicyName: "LambdaExecutionPolicy"
+                  PolicyDocument:
+                    Version: "2012-10-17"
+                    Statement:
+                        - Effect: "Allow"
+                          Action:
+                              - "logs:CreateLogGroup"
+                              - "logs:CreateLogStream"
+                              - "logs:PutLogEvents"
+                          Resource: "*"
+
+Outputs:
+    NotifyLambdaFunction:
+        Description: The ARN of the Lambda function
+        Value: !GetAtt NotifyLambda.Arn
