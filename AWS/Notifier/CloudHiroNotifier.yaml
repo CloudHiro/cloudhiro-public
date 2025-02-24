@@ -1,0 +1,99 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CloudHiro Notifier sends notifications to Google Space, Slack, or Microsoft Teams based on user-defined parameters. For more information, see https://github.com/CloudHiro/cloudhiro-public/blob/main/AWS/Notifier/README.md
+
+Parameters:
+    OverrideUrl:
+        Type: String
+        Description: URL to override notification destination
+        Default: ''
+    CloudHiroNotifySpace:
+        Type: String
+        Description: Google Space notification URL
+        Default: ''
+    CloudHiroNotifySlack:
+        Type: String
+        Description: Slack notification webhook URL
+        Default: ''
+    CloudHiroNotifyTeams:
+        Type: String
+        Description: Microsoft Teams notification webhook URL
+        Default: ''
+
+Conditions:
+    HasOverrideUrl: !Not [!Equals [!Ref OverrideUrl, '']]
+    HasCloudHiroNotifySpace: !Not [!Equals [!Ref CloudHiroNotifySpace, '']]
+    HasCloudHiroNotifySlack: !Not [!Equals [!Ref CloudHiroNotifySlack, '']]
+    HasCloudHiroNotifyTeams: !Not [!Equals [!Ref CloudHiroNotifyTeams, '']]
+
+
+Resources:
+    CloudHiroNotifier:
+        Type: AWS::Lambda::Function
+        Properties: 
+            Runtime: python3.9
+            Handler: index.lambda_handler
+            Role: !GetAtt CloudHiroNotifierRole.Arn
+            Environment:
+                Variables:
+                    OverrideUrl: !If [HasOverrideUrl, !Ref OverrideUrl, ""]
+                    CloudHiroNotifySpace: !If [HasCloudHiroNotifySpace, !Ref CloudHiroNotifySpace, ""]
+                    CloudHiroNotifySlack: !If [HasCloudHiroNotifySlack, !Ref CloudHiroNotifySlack, ""]
+                    CloudHiroNotifyTeams: !If [HasCloudHiroNotifyTeams, !Ref CloudHiroNotifyTeams, ""]
+            Code: 
+                ZipFile: |
+                    import json
+                    import os
+                    import urllib3
+
+                    def lambda_handler(event, context):
+
+                        urls = []
+                        if os.environ.get('OverrideUrl'):
+                            urls = [os.environ.get('OverrideUrl')]
+                        else:
+                            # add the urls that are set to the list
+                            if os.environ.get('CloudHiroNotifySpace'):
+                                urls.append(os.environ.get('CloudHiroNotifySpace'))
+                            if os.environ.get('CloudHiroNotifySlack'):
+                                urls.append(os.environ.get('CloudHiroNotifySlack'))
+                            if os.environ.get('CloudHiroNotifyTeams'):
+                                urls.append(os.environ.get('CloudHiroNotifyTeams'))
+
+                        if len(urls) == 0:
+                            return
+
+                        message = event.get('notificationMessage', 'No message provided')
+                        http = urllib3.PoolManager()
+
+                        for url in urls:
+                            encoded_data = json.dumps({'text': message}).encode('utf-8')
+                            headers = {'Content-Type': 'application/json'}
+                            response = http.request('POST', url, body=encoded_data, headers=headers)
+
+
+    CloudHiroNotifierRole:
+        Type: AWS::IAM::Role
+        Properties:
+            AssumeRolePolicyDocument:
+                Version: "2012-10-17"
+                Statement:
+                    - Effect: "Allow"
+                      Principal:
+                          Service: "lambda.amazonaws.com"
+                      Action: "sts:AssumeRole"
+            Policies:
+                - PolicyName: "LambdaExecutionPolicy"
+                  PolicyDocument:
+                    Version: "2012-10-17"
+                    Statement:
+                        - Effect: "Allow"
+                          Action:
+                              - "logs:CreateLogGroup"
+                              - "logs:CreateLogStream"
+                              - "logs:PutLogEvents"
+                          Resource: "*"
+
+Outputs:
+    CloudHiroNotifierFunction:
+        Description: The ARN of the CloudHiro Notifier Lambda function
+        Value: !GetAtt CloudHiroNotifier.Arn
