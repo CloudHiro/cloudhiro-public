@@ -2,7 +2,7 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: "CloudFormation stack for a Step Function to keep an RDS instance down based on tags."
 
 Parameters:
-  NotifyLambdaArn:
+  CloudHiroNotifierArn:
     Type: String
     Description: "The ARN of the Notify Lambda function."
 
@@ -113,7 +113,7 @@ Resources:
               },
               "SendNotification": {
                 "Type": "Task",
-                "Resource": "${NotifyLambdaArn}",
+                "Resource": "${CloudHiroNotifierArn}",
                 "End": true
               },
               "EndState": {

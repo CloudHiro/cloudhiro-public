@@ -7,7 +7,7 @@ This directory contains a comprehensive collection of solutions designed to help
 ## Solutions
 
 1. **Notifier**
-    - CloudHiro Notifier sends notifications from your other CloudHiro public solutions deployed in AWS. This helps you stay informed about your AWS spending in real-time, allowing you to take proactive measures to manage your costs effectively.
+    - CloudHiro Notifier sends notifications based on specific events in your AWS environment. This helps you stay informed about your AWS spending in real-time, allowing you to take proactive measures to manage your costs effectively.
     - [Read More](./Notifier/README.md)
 
 2. **Keep RDS Down**
