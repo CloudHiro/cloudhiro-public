@@ -10,7 +10,7 @@ CloudHiro Notifier sends notifications to Google Space, Slack, or Microsoft Team
 To deploy CloudHiro Notifier, follow these steps:
 
 1. Open CloudFormation Console using this link:
-   - **[Deploy NotifyLambda Stack](https://us-east-2.console.aws.amazon.com/cloudformation/home?region=us-east-2#/stacks/create?stackName=NotifyLambdaStack&templateURL=https://cloudhiro-public.s3.us-east-2.amazonaws.com/NotifyLambdaStack.yaml)**
+   - **[Deploy NotifyLambda Stack](https://us-east-2.console.aws.amazon.com/cloudformation/home?region=us-east-2#/stacks/create?stackName=CloudHiroNotifier&templateURL=https://cloudhiro-public.s3.us-east-2.amazonaws.com/CloudHiroNotifier.yaml)**
 
 2. Configure parameters:
    - `OverrideUrl`: Sends all notifications to this URL only (if set).
