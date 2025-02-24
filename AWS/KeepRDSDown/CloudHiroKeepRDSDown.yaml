@@ -1,10 +1,10 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: "CloudFormation stack for a Step Function to keep an RDS instance down based on tags."
+Description: CloudHiro Keep RDS Down stops an RDS instance when it exceeds the max stop time based on user-defined tags. For more information, see https://github.com/CloudHiro/cloudhiro-public/blob/main/AWS/KeepRDSDown/README.md
 
 Parameters:
   CloudHiroNotifierArn:
     Type: String
-    Description: "The ARN of the Notify Lambda function."
+    Description: "The ARN of the CloudHiro Notifier Lambda function."
 
 Resources:
   RDSEventRule:
@@ -22,7 +22,7 @@ Resources:
             - "RDS-EVENT-0154"
       State: ENABLED
       Targets:
-        - Arn: !Ref KeepRDSDownStateMachine
+        - Arn: !Ref CloudHiroKeepRDSDown
           Id: "RDSStateMachineTarget"
           RoleArn: !GetAtt EventBridgeInvokeRole.Arn
 
@@ -43,12 +43,12 @@ Resources:
             Statement:
               - Effect: "Allow"
                 Action: "states:StartExecution"
-                Resource: !Ref KeepRDSDownStateMachine
+                Resource: !Ref CloudHiroKeepRDSDown
   
-  KeepRDSDownStateMachine:
+  CloudHiroKeepRDSDown:
     Type: AWS::StepFunctions::StateMachine
     Properties:
-      RoleArn: !GetAtt KeepRDSDownRole.Arn
+      RoleArn: !GetAtt CloudHiroKeepRDSDownRole.Arn
       DefinitionString:
         Fn::Sub: |
           {
@@ -123,7 +123,7 @@ Resources:
             }
           }
   
-  KeepRDSDownRole:
+  CloudHiroKeepRDSDownRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
