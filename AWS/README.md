@@ -6,13 +6,13 @@ This directory contains a comprehensive collection of solutions designed to help
 
 ## Solutions
 
-1. **Notifier**
-    - Description: CloudHiro Notifier sends notifications from your other CloudHiro public solutions deployed in AWS. This helps you stay informed about your AWS spending in real-time, allowing you to take proactive measures to manage your costs effectively.
-    - [Read More](./Notifier/README.md)
+- **Notifier**
+    CloudHiro Notifier sends notifications from your other CloudHiro public solutions deployed in AWS. This helps you stay informed about your AWS spending in real-time, allowing you to take proactive measures to manage your costs effectively.
+    [Read More](./Notifier/README.md)
 
-2. **Keep RDS Down**
-    - Description: CloudHiro Keep RDS Down ensures RDS instances remain stopped when automatically started, based on instance tags. This helps you avoid unnecessary costs by preventing unintended usage of your RDS instances.
-    - [Read More](./KeepRDSDown/README.md)
+- **Keep RDS Down**
+    CloudHiro Keep RDS Down ensures RDS instances remain stopped when automatically started, based on instance tags. This helps you avoid unnecessary costs by preventing unintended usage of your RDS instances.
+    [Read More](./KeepRDSDown/README.md)
 
 
 
