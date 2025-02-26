@@ -1,4 +1,4 @@
-# CloudHiro's Public Azure FinOps Solutions Library
+# CloudHiro's Public Azure FinOps Solutions Library (work in progress)
 
 Welcome to CloudHiro's Azure FinOps Solutions Library. 
 This directory contains a comprehensive collection of solutions designed to help you manage and optimize your Azure financial operations. Each solution includes a brief description and a link for more detailed information about deployment, configuration, workflow, etc.
