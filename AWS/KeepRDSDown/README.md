@@ -30,6 +30,6 @@ The `cloudhiro_rds_keep_down` tag value is the duration you wish to keep the RDS
 
 ## How It Works
 
-1. CloudHiro Keep RDS Down detects when an RDS instance exceeds the allowed stop time and is being started.
+1. CloudHiro Keep RDS Down uses EventBridge to detect when an RDS instance exceeds the allowed stop time and is being started.
 2. If an instance is started, it checks for the `cloudhiro_rds_keep_down` tag.
 3. If the tag is present, it stops the RDS instance and sends a notification using the [CloudHiro Notifier](/AWS/Notifier/README.md).
