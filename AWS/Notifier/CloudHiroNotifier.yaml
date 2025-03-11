@@ -18,12 +18,17 @@ Parameters:
         Type: String
         Description: Microsoft Teams notification webhook URL
         Default: ''
+    CloudHiroToken:
+        Type: String
+        Description: CloudHiro API token (for Cloudhiro Clients)
+        Default: ''
 
 Conditions:
     HasOverrideUrl: !Not [!Equals [!Ref OverrideUrl, '']]
     HasCloudHiroNotifySpace: !Not [!Equals [!Ref CloudHiroNotifySpace, '']]
     HasCloudHiroNotifySlack: !Not [!Equals [!Ref CloudHiroNotifySlack, '']]
     HasCloudHiroNotifyTeams: !Not [!Equals [!Ref CloudHiroNotifyTeams, '']]
+    HasCloudHiroToken: !Not [!Equals [!Ref CloudHiroToken, '']]
 
 
 Resources:
@@ -39,6 +44,7 @@ Resources:
                     CloudHiroNotifySpace: !If [HasCloudHiroNotifySpace, !Ref CloudHiroNotifySpace, ""]
                     CloudHiroNotifySlack: !If [HasCloudHiroNotifySlack, !Ref CloudHiroNotifySlack, ""]
                     CloudHiroNotifyTeams: !If [HasCloudHiroNotifyTeams, !Ref CloudHiroNotifyTeams, ""]
+                    CloudHiroToken: !If [HasCloudHiroToken, !Ref CloudHiroToken, ""]
             Code: 
                 ZipFile: |
                     import json
@@ -70,6 +76,21 @@ Resources:
                             headers = {'Content-Type': 'application/json'}
                             response = http.request('POST', url, body=encoded_data, headers=headers)
 
+                        notification_data = {
+                            'account': event.get('account'),
+                            'source': event.get('source'),
+                            'message': message,
+                            'time': event.get('time')
+                        }
+
+                        encoded_data = json.dumps(notification_data).encode('utf-8')
+                        headers = {'Content-Type': 'application/json'}
+
+                        if os.environ.get('CloudHiroToken'):
+                            token = os.environ.get('CloudHiroToken')
+                            response = http.request('POST', 'http://cloudhiro.com/API/RestBE.php/CHIAutomationAPIBE/Notify?Token=' + token, body=encoded_data, headers=headers)
+                        else:
+                            response = http.request('POST', 'http://cloudhiro.com/API/RestBE.php/CHIAutomationAPIBE/Notify', body=encoded_data, headers=headers)
 
     CloudHiroNotifierRole:
         Type: AWS::IAM::Role
