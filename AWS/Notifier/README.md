@@ -17,6 +17,7 @@ To deploy CloudHiro Notifier, follow these steps:
    - `CloudHiroNotifySpace`: URL for Google Space notifications.
    - `CloudHiroNotifySlack`: URL for Slack notifications.
    - `CloudHiroNotifyMeet`: URL for Microsoft Teams notifications.
+   - `CloudHiroToken`: Cloudhiro API token for existing clients. Contact Cloudhiro at [cloudhiro.com](https://cloudhiro.com) for more information.
 
 3. Click **Create Stack** and wait for completion.
 
@@ -26,6 +27,7 @@ To deploy CloudHiro Notifier, follow these steps:
 - Google Space URL: `https://chat.googleapis.com/v1/spaces/...`
 - Slack URL: `https://hooks.slack.com/services/...`
 - Microsoft Teams URL: `https://outlook.office.com/webhook/...`
+- CloudHiro Token: `78c5f**********************e68db`
 
 
 ## How It Works
