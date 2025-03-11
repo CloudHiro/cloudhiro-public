@@ -1,4 +1,4 @@
-# CloudHiro's Public FinOps Solutions Library
+# CloudHiro's Public FinOps Solutions Library (work in progress)
 
 Welcome to CloudHiro's Public FinOps Solutions Library.
 This repository is a collection of open-source tools designed to help organizations optimize their cloud costs and manage instances more efficiently. By automating routine cloud tasks and preventing unnecessary resource usage, these solutions aim to reduce expenses and improve operational efficiency. 
