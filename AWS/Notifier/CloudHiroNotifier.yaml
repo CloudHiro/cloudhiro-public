@@ -88,9 +88,8 @@ Resources:
 
                         if os.environ.get('CloudHiroToken'):
                             token = os.environ.get('CloudHiroToken')
-                            response = http.request('POST', 'http://cloudhiro.com/API/RestBE.php/CHIAutomationAPIBE/Notify?Token=' + token, body=encoded_data, headers=headers)
-                        else:
-                            response = http.request('POST', 'http://cloudhiro.com/API/RestBE.php/CHIAutomationAPIBE/Notify', body=encoded_data, headers=headers)
+                            response = http.request('POST', 'http://cloudhiro.co.il/CHI/CHIAutomation.php?Type=Notify&Token=' + token, body=encoded_data, headers=headers)
+
 
     CloudHiroNotifierRole:
         Type: AWS::IAM::Role
