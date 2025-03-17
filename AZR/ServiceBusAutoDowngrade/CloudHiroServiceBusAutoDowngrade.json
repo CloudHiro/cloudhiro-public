@@ -1,0 +1,152 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "resources": [
+      {
+        "type": "Microsoft.Logic/workflows",
+        "apiVersion": "2016-06-01",
+        "name": "ServiceBusAutoDowngrade",
+        "location": "[resourceGroup().location]",
+        "properties": {
+          "state": "Enabled",
+          "definition": {
+            "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowDefinition.json#",
+            "actions": {
+              "Parse_JSON": {
+                "inputs": {
+                  "content": "@triggerBody()?['data']",
+                  "schema": {
+                    "type": "object",
+                    "properties": {
+                      "sku": {
+                        "type": "object",
+                        "properties": {
+                          "name": { "type": "string" }
+                        }
+                      },
+                      "messagingUnits": {
+                        "type": "integer"
+                      },
+                      "tags": {
+                        "type": "object",
+                        "properties": {
+                          "cloudhiro-downgrade-servicebus": { "type": "string" }
+                        }
+                      },
+                      "resourceGroup": {
+                        "type": "string"
+                      },
+                      "resourceName": {
+                        "type": "string" }
+                    }
+                  }
+                },
+                "runAfter": {},
+                "type": "ParseJson"
+              },
+              "Check_Messaging_Units": {
+                "actions": {
+                  "Backup_ServiceBus": {
+                    "inputs": {
+                      "method": "GET",
+                      "uri": "https://management.azure.com/subscriptions/{subscriptionId}/resourceGroups/@{body('Parse_JSON')?['resourceGroup']}/providers/Microsoft.ServiceBus/namespaces/@{body('Parse_JSON')?['resourceName']}?api-version=2021-11-01",
+                      "headers": {
+                        "Content-Type": "application/json"
+                      }
+                    },
+                    "metadata": {
+                      "operationMetadataId": "backupServiceBus"
+                    },
+                    "runAfter": {},
+                    "type": "Http"
+                  },
+                  "Downgrade_ServiceBus": {
+                    "inputs": {
+                      "method": "PUT",
+                      "uri": "https://management.azure.com/subscriptions/{subscriptionId}/resourceGroups/@{body('Parse_JSON')?['resourceGroup']}/providers/Microsoft.ServiceBus/namespaces/@{body('Parse_JSON')?['resourceName']}?api-version=2021-11-01",
+                      "headers": {
+                        "Content-Type": "application/json"
+                      },
+                      "body": {
+                        "sku": {
+                          "name": "Standard",
+                          "tier": "Standard"
+                        }
+                      }
+                    },
+                    "metadata": {
+                      "operationMetadataId": "downgradeServiceBus"
+                    },
+                    "runAfter": {
+                      "Backup_ServiceBus": [
+                        "Succeeded"
+                      ]
+                    },
+                    "type": "Http"
+                  }
+                },
+                "expression": {
+                  "and": [
+                    {
+                      "equals": [
+                        "@body('Parse_JSON')?['sku']['name']",
+                        "Premium"
+                      ]
+                    },
+                    {
+                      "lessOrEquals": [
+                        "@body('Parse_JSON')?['messagingUnits']",
+                        1
+                      ]
+                    },
+                    {
+                      "equals": [
+                        "@body('Parse_JSON')?['tags']['cloudhiro-downgrade-servicebus']",
+                        "true"
+                      ]
+                    }
+                  ]
+                },
+                "runAfter": {
+                  "Parse_JSON": [
+                    "Succeeded"
+                  ]
+                },
+                "type": "If"
+              }
+            },
+            "triggers": {
+              "When_an_Event_Grid_event_occurs": {
+                "inputs": {
+                  "schema": "EventGridSchema"
+                },
+                "metadata": {
+                  "operationMetadataId": "eventGridTrigger"
+                },
+                "type": "Request",
+                "kind": "Http"
+              }
+            }
+          }
+        }
+      },
+      {
+        "type": "Microsoft.EventGrid/eventSubscriptions",
+        "apiVersion": "2020-10-15-preview",
+        "name": "ServiceBusMessagingUnitChange",
+        "properties": {
+          "destination": {
+            "endpointType": "AzureFunction",
+            "properties": {
+              "resourceId": "[resourceId('Microsoft.Logic/workflows', 'ServiceBusAutoDowngrade')]"
+            }
+          },
+          "filter": {
+            "includedEventTypes": [
+              "Microsoft.ServiceBus/namespaces/write"
+            ]
+          }
+        }
+      }
+    ]
+  }
