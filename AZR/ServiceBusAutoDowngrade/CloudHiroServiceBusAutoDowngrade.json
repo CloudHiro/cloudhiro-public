@@ -2,151 +2,235 @@
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "resources": [
-      {
-        "type": "Microsoft.Logic/workflows",
-        "apiVersion": "2016-06-01",
-        "name": "ServiceBusAutoDowngrade",
-        "location": "[resourceGroup().location]",
-        "properties": {
-          "state": "Enabled",
-          "definition": {
-            "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowDefinition.json#",
-            "actions": {
-              "Parse_JSON": {
-                "inputs": {
-                  "content": "@triggerBody()?['data']",
-                  "schema": {
-                    "type": "object",
-                    "properties": {
-                      "sku": {
-                        "type": "object",
-                        "properties": {
-                          "name": { "type": "string" }
-                        }
-                      },
-                      "messagingUnits": {
-                        "type": "integer"
-                      },
-                      "tags": {
-                        "type": "object",
-                        "properties": {
-                          "cloudhiro-downgrade-servicebus": { "type": "string" }
-                        }
-                      },
-                      "resourceGroup": {
-                        "type": "string"
-                      },
-                      "resourceName": {
-                        "type": "string" }
-                    }
-                  }
-                },
-                "runAfter": {},
-                "type": "ParseJson"
-              },
-              "Check_Messaging_Units": {
-                "actions": {
-                  "Backup_ServiceBus": {
-                    "inputs": {
-                      "method": "GET",
-                      "uri": "https://management.azure.com/subscriptions/{subscriptionId}/resourceGroups/@{body('Parse_JSON')?['resourceGroup']}/providers/Microsoft.ServiceBus/namespaces/@{body('Parse_JSON')?['resourceName']}?api-version=2021-11-01",
-                      "headers": {
-                        "Content-Type": "application/json"
-                      }
-                    },
-                    "metadata": {
-                      "operationMetadataId": "backupServiceBus"
-                    },
-                    "runAfter": {},
-                    "type": "Http"
-                  },
-                  "Downgrade_ServiceBus": {
-                    "inputs": {
-                      "method": "PUT",
-                      "uri": "https://management.azure.com/subscriptions/{subscriptionId}/resourceGroups/@{body('Parse_JSON')?['resourceGroup']}/providers/Microsoft.ServiceBus/namespaces/@{body('Parse_JSON')?['resourceName']}?api-version=2021-11-01",
-                      "headers": {
-                        "Content-Type": "application/json"
-                      },
-                      "body": {
-                        "sku": {
-                          "name": "Standard",
-                          "tier": "Standard"
-                        }
-                      }
-                    },
-                    "metadata": {
-                      "operationMetadataId": "downgradeServiceBus"
-                    },
-                    "runAfter": {
-                      "Backup_ServiceBus": [
-                        "Succeeded"
-                      ]
-                    },
-                    "type": "Http"
-                  }
-                },
-                "expression": {
-                  "and": [
-                    {
-                      "equals": [
-                        "@body('Parse_JSON')?['sku']['name']",
-                        "Premium"
-                      ]
-                    },
-                    {
-                      "lessOrEquals": [
-                        "@body('Parse_JSON')?['messagingUnits']",
-                        1
-                      ]
-                    },
-                    {
-                      "equals": [
-                        "@body('Parse_JSON')?['tags']['cloudhiro-downgrade-servicebus']",
-                        "true"
-                      ]
-                    }
-                  ]
-                },
-                "runAfter": {
-                  "Parse_JSON": [
-                    "Succeeded"
-                  ]
-                },
-                "type": "If"
-              }
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2016-06-01",
+            "name": "ServiceBusAutoDowngrade",
+            "location": "[resourceGroup().location]",
+            "identity": {
+                "type": "SystemAssigned"
             },
-            "triggers": {
-              "When_an_Event_Grid_event_occurs": {
-                "inputs": {
-                  "schema": "EventGridSchema"
-                },
-                "metadata": {
-                  "operationMetadataId": "eventGridTrigger"
-                },
-                "type": "Request",
-                "kind": "Http"
-              }
-            }
-          }
-        }
-      },
-      {
-        "type": "Microsoft.EventGrid/eventSubscriptions",
-        "apiVersion": "2020-10-15-preview",
-        "name": "ServiceBusMessagingUnitChange",
-        "properties": {
-          "destination": {
-            "endpointType": "AzureFunction",
             "properties": {
-              "resourceId": "[resourceId('Microsoft.Logic/workflows', 'ServiceBusAutoDowngrade')]"
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowDefinition.json#",
+                    "parameters": {
+                        "subscriptionId": {
+                            "type": "string",
+                            "defaultValue": "[subscription().subscriptionId]"
+                        },
+                        "resourceGroupName": {
+                            "type": "string",
+                            "defaultValue": "[resourceGroup().name]"
+                        }
+                    },
+                    "triggers": {
+                        "Recurrence": {
+                            "type": "Recurrence",
+                            "recurrence": {
+                                "frequency": "Day",
+                                "interval": 1,
+                                "timeZone": "UTC",
+                                "startTime": "2025-03-19T17:00:00Z",
+                                "schedule": {
+                                    "hours": [ 17 ],
+                                    "minutes": [ 0 ]
+                                }
+                            }
+                        }
+                    },
+                    "actions": {
+                        "List_Service_Buses": {
+                            "inputs": {
+                                "method": "GET",
+                                "uri": "https://management.azure.com/subscriptions/@{parameters('subscriptionId')}/resourceGroups/@{parameters('resourceGroupName')}/providers/Microsoft.ServiceBus/namespaces?api-version=2021-11-01",
+                                "headers": {
+                                    "Content-Type": "application/json"
+                                },
+                                "authentication": {
+                                    "type": "ManagedServiceIdentity"
+                                }
+                            },
+                            "metadata": {
+                                "operationMetadataId": "listServiceBuses"
+                            },
+                            "type": "Http"
+                        },
+                        "Filter_Premium_Buses": {
+                            "foreach": "@body('List_Service_Buses')?['value']",
+                            "actions": {
+                                "Check_Condition": {
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [ "@item()?['sku']['tier']", "Premium" ]
+                                            },
+                                            {
+                                                "lessOrEquals": [ "@item()?['sku']['capacity']", 1 ]
+                                            },
+                                            {
+                                                "equals": [ "@item()?['tags']['cloudhiro-downgrade-servicebus']", "true" ]
+                                            }
+                                        ]
+                                    },
+                                    "actions": {
+                                        "Create_Standard_Namespace": {
+                                            "inputs": {
+                                                "method": "PUT",
+                                                "uri": "https://management.azure.com/subscriptions/@{parameters('subscriptionId')}/resourceGroups/@{parameters('resourceGroupName')}/providers/Microsoft.ServiceBus/namespaces/@{concat(item()['name'],'-standard')}?api-version=2021-11-01",
+                                                "body": {
+                                                    "location": "@{item()['location']}",
+                                                    "sku": {
+                                                        "name": "Standard",
+                                                        "tier": "Standard"
+                                                    },
+                                                    "properties": {}
+                                                },
+                                                "authentication": {
+                                                    "type": "ManagedServiceIdentity"
+                                                },
+                                                "headers": {
+                                                    "Content-Type": "application/json"
+                                                }
+                                            },
+                                            "type": "Http"
+                                        },
+                                        "Get_Queues": {
+                                            "inputs": {
+                                                "method": "GET",
+                                                "uri": "https://management.azure.com/subscriptions/@{parameters('subscriptionId')}/resourceGroups/@{parameters('resourceGroupName')}/providers/Microsoft.ServiceBus/namespaces/@{item()['name']}/queues?api-version=2015-08-01",
+                                                "authentication": {
+                                                    "type": "ManagedServiceIdentity"
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Create_Standard_Namespace": [ "Succeeded" ]
+                                            },
+                                            "type": "Http"
+                                        },
+                                        "Create_Queues": {
+                                            "foreach": "@body('Get_Queues')?['value']",
+                                            "actions": {
+                                                "Create_Queue": {
+                                                    "inputs": {
+                                                        "method": "PUT",
+                                                        "uri": "https://management.azure.com/subscriptions/@{parameters('subscriptionId')}/resourceGroups/@{parameters('resourceGroupName')}/providers/Microsoft.ServiceBus/namespaces/@{concat(items('Filter_Premium_Buses')?['name'],'-standard')}/queues/@{item()['name']}?api-version=2021-11-01",
+                                                        "body": "@item()['properties']",
+                                                        "authentication": {
+                                                            "type": "ManagedServiceIdentity"
+                                                        }
+                                                    },
+                                                    "type": "Http"
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Get_Queues": [ "Succeeded" ]
+                                            },
+                                            "type": "ForEach"
+                                        },
+                                        "Get_Topics": {
+                                            "inputs": {
+                                                "method": "GET",
+                                                "uri": "https://management.azure.com/subscriptions/@{parameters('subscriptionId')}/resourceGroups/@{parameters('resourceGroupName')}/providers/Microsoft.ServiceBus/namespaces/@{item()['name']}/topics?api-version=2015-08-01",
+                                                "authentication": {
+                                                    "type": "ManagedServiceIdentity"
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Create_Queues": [ "Succeeded" ]
+                                            },
+                                            "type": "Http"
+                                        },
+                                        "Create_Topics": {
+                                            "foreach": "@body('Get_Topics')?['value']",
+                                            "actions": {
+                                                "Create_Topic": {
+                                                    "inputs": {
+                                                        "method": "PUT",
+                                                        "uri": "https://management.azure.com/subscriptions/@{parameters('subscriptionId')}/resourceGroups/@{parameters('resourceGroupName')}/providers/Microsoft.ServiceBus/namespaces/@{concat(items('Filter_Premium_Buses')?['name'],'-standard')}/topics/@{item()['name']}?api-version=2021-11-01",
+                                                        "body": "@item()['properties']",
+                                                        "authentication": {
+                                                            "type": "ManagedServiceIdentity"
+                                                        }
+                                                    },
+                                                    "type": "Http"
+                                                },
+                                                "Get_Subscriptions": {
+                                                    "inputs": {
+                                                        "method": "GET",
+                                                        "uri": "https://management.azure.com/subscriptions/@{parameters('subscriptionId')}/resourceGroups/@{parameters('resourceGroupName')}/providers/Microsoft.ServiceBus/namespaces/@{items('Filter_Premium_Buses')?['name']}/topics/@{item()['name']}/subscriptions?api-version=2015-08-01",
+                                                        "authentication": {
+                                                            "type": "ManagedServiceIdentity"
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "Create_Topic": [ "Succeeded" ]
+                                                    },
+                                                    "type": "Http"
+                                                },
+                                                "Create_Subscriptions": {
+                                                    "foreach": "@body('Get_Subscriptions')?['value']",
+                                                    "actions": {
+                                                        "Create_Subscription": {
+                                                            "inputs": {
+                                                                "method": "PUT",
+                                                                "uri": "https://management.azure.com/subscriptions/@{parameters('subscriptionId')}/resourceGroups/@{parameters('resourceGroupName')}/providers/Microsoft.ServiceBus/namespaces/@{concat(items('Filter_Premium_Buses')?['name'],'-standard')}/topics/@{items('Create_Topics')?['name']}/subscriptions/@{item()['name']}?api-version=2021-11-01",
+                                                                "body": "@item()['properties']",
+                                                                "authentication": {
+                                                                    "type": "ManagedServiceIdentity"
+                                                                }
+                                                            },
+                                                            "type": "Http"
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "Get_Subscriptions": [ "Succeeded" ]
+                                                    },
+                                                    "type": "ForEach"
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Get_Topics": [ "Succeeded" ]
+                                            },
+                                            "type": "ForEach"
+                                        },
+                                        "Delete_Premium_Namespace": {
+                                            "inputs": {
+                                                "method": "DELETE",
+                                                "uri": "https://management.azure.com/subscriptions/@{parameters('subscriptionId')}/resourceGroups/@{parameters('resourceGroupName')}/providers/Microsoft.ServiceBus/namespaces/@{item()['name']}?api-version=2021-11-01",
+                                                "authentication": {
+                                                    "type": "ManagedServiceIdentity"
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Create_Topics": [ "Succeeded" ]
+                                            },
+                                            "type": "Http"
+                                        }
+                                    },
+                                    "type": "If"
+                                }
+                            },
+                            "runAfter": {
+                                "List_Service_Buses": [ "Succeeded" ]
+                            },
+                            "type": "ForEach"
+                        }
+                    }
+                }
             }
-          },
-          "filter": {
-            "includedEventTypes": [
-              "Microsoft.ServiceBus/namespaces/write"
-            ]
-          }
+        },
+        {
+            "type": "Microsoft.Authorization/roleAssignments",
+            "apiVersion": "2022-04-01",
+            "name": "[guid(resourceGroup().id, 'LogicAppManagedIdentity', 'Contributor')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'b24988ac-6180-42a0-ab88-20f7382dd24c')]",
+                "principalId": "[reference(resourceId('Microsoft.Logic/workflows', 'ServiceBusAutoDowngrade'), '2016-06-01', 'Full').identity.principalId]",
+                "principalType": "ServicePrincipal",
+                "scope": "[resourceGroup().id]"
+            }
         }
-      }
     ]
-  }
+}
