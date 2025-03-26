@@ -6,7 +6,7 @@ This directory contains a comprehensive collection of solutions designed to help
 ## Solutions
 
 1. **Service Bus Autodowngrade**
-    - The **Service Bus Autodowngrade** solution automatically downgrades premium-tier Azure Service Bus instances to the standard tier when premium features are no longer required, based on instance tags. This helps reduce costs while maintaining operational efficiency.
+    - The Service Bus Autodowngrade solution automatically downgrades premium-tier Azure Service Bus instances to the standard tier when premium features are no longer required, based on instance tags. This helps reduce costs while maintaining operational efficiency.
     - [Read More](./ServiceBusAutoDowngrade/README.md)
 
 2. **Solution 2**
