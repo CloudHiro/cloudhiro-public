@@ -5,9 +5,9 @@ This directory contains a comprehensive collection of solutions designed to help
 
 ## Solutions
 
-1. **Solution 1**
-    - Description of Solution 1. This helps you manage and optimize your Azure financial operations effectively.
-    - [Read More](./Solution1/README.md)
+1. **Service Bus Autodowngrade**
+    - The **Service Bus Autodowngrade** solution automatically downgrades premium-tier Azure Service Bus instances to the standard tier when premium features are no longer required, based on instance tags. This helps reduce costs while maintaining operational efficiency.
+    - [Read More](./ServiceBusAutoDowngrade/README.md)
 
 2. **Solution 2**
     - Description of Solution 2. This helps you manage and optimize your Azure financial operations effectively.
