@@ -10,9 +10,7 @@ Cloudhiro Service Bus Auto Downgrade is a Logic App designed to help you optimiz
 To deploy Azure Service Bus Auto Downgrade, follow these steps:
 
 1. Open Azure Portal and deploy the ARM template using this link:
-    - **[Deploy ServiceBusAutoDowngrade Template](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FCloudHiro%2Fcloudhiro-public%2Frefs%2Fheads%2FCLOUD-1659%2FAZR%2FServiceBusAutoDowngrade%2FCloudHiroServiceBusAutoDowngrade.json)**
-
-    - **[Deploy ServiceBusAutoDowngrade Template (Main)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FCloudHiro%2Fcloudhiro-public%2Frefs%2Fheads%2Fmain%2FAZR%2FServiceBusAutoDowngrade%2FCloudHiroServiceBusAutoDowngrade.json)**
+    - **[Deploy ServiceBusAutoDowngrade Template](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FCloudHiro%2Fcloudhiro-public%2Frefs%2Fheads%2Fmain%2FAZR%2FServiceBusAutoDowngrade%2FCloudHiroServiceBusAutoDowngrade.json)**
 
 2. Select project details (subscription, resource group) and instance details (region) for deployment.
 
