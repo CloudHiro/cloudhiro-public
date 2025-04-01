@@ -50,9 +50,7 @@
                         "Filter_Namespaces": {
                             "type": "ForEach",
                             "runAfter": {
-                                "List_Service_Buses": [
-                                    "Succeeded"
-                                ]
+                                "List_Service_Buses": ["Succeeded"]
                             },
                             "foreach": "@body('List_Service_Buses')?['value']",
                             "actions": {
@@ -106,44 +104,40 @@
                                     },
                                     "actions": {
                                         "Deploy_Backup_Workflow": {
+                                            "type": "Http",
                                             "inputs": {
                                                 "method": "PUT",
-                                                "uri": "https://management.azure.com/subscriptions/@{parameters('subscriptionId')}/resourceGroups/@{parameters('resourceGroupName')}/providers/Microsoft.Logic/workflows/@{concat(item()['name'], '-backup-delete')}?api-version=2019-05-01",
+                                                "uri": "https://management.azure.com/subscriptions/@{parameters('subscriptionId')}/resourceGroups/@{parameters('resourceGroupName')}/providers/Microsoft.Resources/deployments/@{concat(item()['name'], '-backup-delete')}?api-version=2021-04-01",
                                                 "headers": {
                                                     "Content-Type": "application/json"
                                                 },
+                                                "authentication": {
+                                                    "type": "ManagedServiceIdentity"
+                                                },
                                                 "body": {
-                                                    "location": "[resourceGroup().location]",
                                                     "properties": {
-                                                        "definition": {
-                                                            "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowDefinition.json#",
-                                                            "actions": {
-                                                                "Backup_And_Delete": {
-                                                                    "inputs": {
-                                                                        "method": "POST",
-                                                                        "uri": "https://management.azure.com/subscriptions/@{parameters('subscriptionId')}/resourceGroups/@{parameters('resourceGroupName')}/providers/Microsoft.ServiceBus/namespaces/@{item()['name']}/backup",
-                                                                        "authentication": {
-                                                                            "type": "ManagedServiceIdentity"
-                                                                        }
-                                                                    },
-                                                                    "type": "Http"
-                                                                }
+                                                        "mode": "Incremental",
+                                                        "templateLink": {
+                                                            "uri": "https://raw.githubusercontent.com/CloudHiro/cloudhiro-public/refs/heads/CLOUD-1679/AZR/ServiceBusAutoRestart/CloudHiroServiceBusBackupDelete.json",
+                                                            "contentVersion": "1.0.0.0"
+                                                        },
+                                                        "parameters": {
+                                                            "subscriptionId": {
+                                                                "value": "@{parameters('subscriptionId')}"
                                                             },
-                                                            "triggers": {
-                                                                "Recurrence": {
-                                                                    "type": "Recurrence",
-                                                                    "recurrence": {
-                                                                        "frequency": "Day",
-                                                                        "interval": 1,
-                                                                        "startTime": "@item()?['tags']['cloudhiro-restore-servicebus']"
-                                                                    }
-                                                                }
+                                                            "resourceGroupName": {
+                                                                "value": "@{parameters('resourceGroupName')}"
+                                                            },
+                                                            "namespaceName": {
+                                                                "value": "@{item()['name']}"
+                                                            },
+                                                            "backupTime": {
+                                                                "value": "@{concat(item()?['tags']['cloudhiro-backup-servicebus'], ':00Z')}"
                                                             }
                                                         }
                                                     }
                                                 }
-                                            },
-                                            "type": "Http"
+                                            }
                                         },
                                         "Deploy_Restore_Workflow": {
                                             "inputs": {
@@ -151,6 +145,9 @@
                                                 "uri": "https://management.azure.com/subscriptions/@{parameters('subscriptionId')}/resourceGroups/@{parameters('resourceGroupName')}/providers/Microsoft.Logic/workflows/@{concat(item()['name'], '-restore')}?api-version=2019-05-01",
                                                 "headers": {
                                                     "Content-Type": "application/json"
+                                                },
+                                                "authentication": {
+                                                    "type": "ManagedServiceIdentity"
                                                 },
                                                 "body": {
                                                     "location": "[resourceGroup().location]",
@@ -175,7 +172,7 @@
                                                                     "recurrence": {
                                                                         "frequency": "Day",
                                                                         "interval": 1,
-                                                                        "startTime": "@item('Extract_Up_Time')[1]"
+                                                                        "startTime": "@concat(utcNow('yyyy-MM-ddT'), item()?['tags']['cloudhiro-restore-servicebus'], ':00Z')"
                                                                     }
                                                                 }
                                                             }
