@@ -1,0 +1,426 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "resources": [
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2016-06-01",
+            "name": "ServiceBusAutoRestart",
+            "location": "[resourceGroup().location]",
+            "identity": {
+                "type": "UserAssigned",
+                "userAssignedIdentities": {
+                    "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', 'CloudHiroServiceBusAutoRestart')]": {}
+                }
+            },
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowDefinition.json#",
+                    "parameters": {
+                        "subscriptionId": {
+                            "type": "String",
+                            "defaultValue": "[subscription().subscriptionId]"
+                        },
+                        "resourceGroupName": {
+                            "type": "String",
+                            "defaultValue": "[resourceGroup().name]"
+                        }
+                    },
+                    "triggers": {
+                        "Recurrence": {
+                            "type": "Recurrence",
+                            "recurrence": {
+                                "frequency": "Day",
+                                "interval": 1
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Initialize_Queues_List": {
+                            "type": "InitializeVariable",
+                            "runAfter": {
+                                "List_Service_Buses": [ "Succeeded" ]
+                            },                                            
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "queuesList",
+                                        "type": "Array",
+                                        "value": []
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Topics_List": {
+                            "type": "InitializeVariable",
+                            "runAfter": {
+                                "List_Service_Buses": [ "Succeeded" ]
+                            },                                            
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "topicsList",
+                                        "type": "Array",
+                                        "value": []
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Subscriptions_List": {
+                            "type": "InitializeVariable",
+                            "runAfter": {
+                                "List_Service_Buses": [ "Succeeded" ]
+                            },                                            
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "subscriptionsList",
+                                        "type": "Array",
+                                        "value": []
+                                    }
+                                ]
+                            }
+                        },
+                        "List_Service_Buses": {
+                            "inputs": {
+                                "method": "GET",
+                                "uri": "https://management.azure.com/subscriptions/@{parameters('subscriptionId')}/resourceGroups/@{parameters('resourceGroupName')}/providers/Microsoft.ServiceBus/namespaces?api-version=2021-11-01",
+                                "headers": {
+                                    "Content-Type": "application/json"
+                                },
+                                "authentication": {
+                                    "type": "ManagedServiceIdentity",
+                                    "identity": "/subscriptions/@{parameters('subscriptionId')}/resourceGroups/@{parameters('resourceGroupName')}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/CloudHiroServiceBusAutoRestart"
+                                }
+                            },
+                            "type": "Http"
+                        },
+                        "Filter_Namespaces": {
+                            "type": "ForEach",
+                            "runAfter": {
+                                "List_Service_Buses": [ "Succeeded" ]
+                            },
+                            "foreach": "@body('List_Service_Buses')?['value']",
+                            "actions": {
+                                "Check_Tags": {
+                                    "type": "If",
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "not": {
+                                                    "equals": [ "@item()?['tags']['cloudhiro-backup-servicebus']", null ]
+                                                }
+                                            },
+                                            {
+                                                "not": {
+                                                    "equals": [ "@item()?['tags']['cloudhiro-restore-servicebus']", null ]
+                                                }
+                                            },
+                                            {
+                                                "and": [
+                                                    {
+                                                        "lessOrEquals": [ "@int(first(split(item()?['tags']['cloudhiro-backup-servicebus'], ':')))", 23 ]
+                                                    },
+                                                    {
+                                                        "greaterOrEquals": [ "@int(first(split(item()?['tags']['cloudhiro-backup-servicebus'], ':')))", 0 ]
+                                                    },
+                                                    {
+                                                        "lessOrEquals": [ "@int(last(split(item()?['tags']['cloudhiro-backup-servicebus'], ':')))", 59 ]
+                                                    },
+                                                    {
+                                                        "greaterOrEquals": [ "@int(last(split(item()?['tags']['cloudhiro-backup-servicebus'], ':')))", 0 ]
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                "and": [
+                                                    {
+                                                        "lessOrEquals": [ "@int(first(split(item()?['tags']['cloudhiro-restore-servicebus'], ':')))", 23 ]
+                                                    },
+                                                    {
+                                                        "greaterOrEquals": [ "@int(first(split(item()?['tags']['cloudhiro-restore-servicebus'], ':')))", 0 ]
+                                                    },
+                                                    {
+                                                        "lessOrEquals": [ "@int(last(split(item()?['tags']['cloudhiro-restore-servicebus'], ':')))", 59 ]
+                                                    },
+                                                    {
+                                                        "greaterOrEquals": [ "@int(last(split(item()?['tags']['cloudhiro-restore-servicebus'], ':')))", 0 ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "actions": {
+                                        "Get_Namespace": {
+                                            "type": "Http",
+                                            "inputs": {
+                                                "method": "GET",
+                                                "uri": "https://management.azure.com/subscriptions/@{parameters('subscriptionId')}/resourceGroups/@{parameters('resourceGroupName')}/providers/Microsoft.ServiceBus/namespaces/@{item()['name']}?api-version=2021-11-01",
+                                                "headers": {
+                                                    "Content-Type": "application/json"
+                                                },
+                                                "authentication": {
+                                                    "type": "ManagedServiceIdentity",
+                                                    "identity": "/subscriptions/@{parameters('subscriptionId')}/resourceGroups/@{parameters('resourceGroupName')}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/CloudHiroServiceBusAutoRestart"
+                                                }
+                                            }
+                                        },
+                                        "Get_Queues": {
+                                            "type": "Http",
+                                            "runAfter": {
+                                                "Get_Namespace": [ "Succeeded" ]
+                                            },
+                                            "inputs": {
+                                                "method": "GET",
+                                                "uri": "https://management.azure.com/subscriptions/@{parameters('subscriptionId')}/resourceGroups/@{parameters('resourceGroupName')}/providers/Microsoft.ServiceBus/namespaces/@{item()['name']}/queues?api-version=2021-11-01",
+                                                "headers": {
+                                                    "Content-Type": "application/json"
+                                                },
+                                                "authentication": {
+                                                    "type": "ManagedServiceIdentity",
+                                                    "identity": "/subscriptions/@{parameters('subscriptionId')}/resourceGroups/@{parameters('resourceGroupName')}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/CloudHiroServiceBusAutoRestart"
+                                                }
+                                            }
+                                        },
+                                        "Get_Topics": {
+                                            "type": "Http",
+                                            "runAfter": {
+                                                "Get_Queues": [ "Succeeded" ]
+                                            },
+                                            "inputs": {
+                                                "method": "GET",
+                                                "uri": "https://management.azure.com/subscriptions/@{parameters('subscriptionId')}/resourceGroups/@{parameters('resourceGroupName')}/providers/Microsoft.ServiceBus/namespaces/@{item()['name']}/topics?api-version=2021-11-01",
+                                                "headers": {
+                                                    "Content-Type": "application/json"
+                                                },
+                                                "authentication": {
+                                                    "type": "ManagedServiceIdentity",
+                                                    "identity": "/subscriptions/@{parameters('subscriptionId')}/resourceGroups/@{parameters('resourceGroupName')}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/CloudHiroServiceBusAutoRestart"
+                                                }
+                                            }
+                                        },
+                                        "Get_Subscriptions": {
+                                            "type": "ForEach",
+                                            "foreach": "@body('Get_Topics')?['value']",
+                                            "runAfter": {
+                                                "Get_Topics": [ "Succeeded" ]
+                                            },
+                                            "actions": {
+                                                "Get_Topic_Subscriptions": {
+                                                    "type": "Http",
+                                                    "inputs": {
+                                                        "method": "GET",
+                                                        "uri": "https://management.azure.com@{item()?['id']}/subscriptions?api-version=2021-11-01",
+                                                        "headers": {
+                                                            "Content-Type": "application/json"
+                                                        },
+                                                        "authentication": {
+                                                            "type": "ManagedServiceIdentity",
+                                                            "identity": "/subscriptions/@{parameters('subscriptionId')}/resourceGroups/@{parameters('resourceGroupName')}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/CloudHiroServiceBusAutoRestart"
+                                                        }
+                                                    }
+                                                },
+                                                "Compose_Subscriptions_Template": {
+                                                    "type": "ForEach",
+                                                    "foreach": "@body('Get_Topic_Subscriptions')?['value']",
+                                                    "runAfter": {
+                                                        "Get_Topic_Subscriptions": [ "Succeeded" ]
+                                                    },
+                                                    "actions": {
+                                                        "Compose_Subscription_Template": {
+                                                            "type": "Compose",
+                                                            "inputs": {
+                                                                "name": "@item()?['name']",
+                                                                "type": "@item()?['type']",
+                                                                "location": "@item()?['location']",
+                                                                "properties": {
+                                                                    "lockDuration": "@item()?['properties']?['lockDuration']",
+                                                                    "defaultMessageTimeToLive": "@item()?['properties']?['defaultMessageTimeToLive']",
+                                                                    "deadLetteringOnMessageExpiration": "@item()?['properties']?['deadLetteringOnMessageExpiration']",
+                                                                    "requiresSession": "@item()?['properties']?['requiresSession']",
+                                                                    "enableBatchedOperations": "@item()?['properties']?['enableBatchedOperations']"
+                                                                }
+                                                            }
+                                                        },
+                                                        "Append_Subscription_To_Template": {
+                                                            "type": "AppendToArrayVariable",
+                                                            "runAfter": {
+                                                                "Compose_Subscription_Template": [ "Succeeded" ]
+                                                            },
+                                                            "inputs": {
+                                                                "name": "subscriptionsList",
+                                                                "value": "@outputs('Compose_Subscription_Template')"
+                                                            }
+                                                        }
+                                                    }
+                                                }                                                
+                                            }
+                                        },
+                                        "Compose_Namespace_Template": {
+                                            "type": "Compose",
+                                            "runAfter": {
+                                                "Get_Subscriptions": [ "Succeeded" ]
+                                            },
+                                            "inputs": {
+                                                "name": "@body('Get_Namespace')?['name']",
+                                                "type": "@body('Get_Namespace')?['type']",
+                                                "location": "@body('Get_Namespace')?['location']",
+                                                "tags": "@body('Get_Namespace')?['tags']",
+                                                "sku": "@body('Get_Namespace')?['sku']",
+                                                "properties": {
+                                                    "disableLocalAuth": "@body('Get_Namespace')?['properties']?['disableLocalAuth']",
+                                                    "zoneRedundant": "@body('Get_Namespace')?['properties']?['zoneRedundant']"
+                                                }
+                                            }
+                                        },
+                                        "Compose_Queues_Template": {
+                                            "type": "ForEach",
+                                            "foreach": "@body('Get_Queues')?['value']",
+                                            "runAfter": {
+                                                "Get_Queues": [ "Succeeded" ]
+                                            },
+                                            "actions": {
+                                                "Compose_Queue_Template": {
+                                                    "type": "Compose",
+                                                    "inputs": {
+                                                        "name": "@item()?['name']",
+                                                        "type": "@item()?['type']",
+                                                        "location": "@item()?['location']",
+                                                        "properties": {
+                                                            "maxSizeInMegabytes": "@item()?['properties']?['maxSizeInMegabytes']",
+                                                            "lockDuration": "@item()?['properties']?['lockDuration']",
+                                                            "requiresDuplicateDetection": "@item()?['properties']?['requiresDuplicateDetection']",
+                                                            "requiresSession": "@item()?['properties']?['requiresSession']",
+                                                            "defaultMessageTimeToLive": "@item()?['properties']?['defaultMessageTimeToLive']",
+                                                            "deadLetteringOnMessageExpiration": "@item()?['properties']?['deadLetteringOnMessageExpiration']",
+                                                            "duplicateDetectionHistoryTimeWindow": "@item()?['properties']?['duplicateDetectionHistoryTimeWindow']"
+                                                        }
+                                                    }
+                                                },
+                                                "Append_Queue_To_Template": {
+                                                    "type": "AppendToArrayVariable",
+                                                    "runAfter": {
+                                                        "Compose_Queue_Template": [ "Succeeded" ]
+                                                    },
+                                                    "inputs": {
+                                                        "name": "queuesList",
+                                                        "value": "@outputs('Compose_Queue_Template')"
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "Compose_Topics_Template": {
+                                            "type": "ForEach",
+                                            "foreach": "@body('Get_Topics')?['value']",
+                                            "runAfter": {
+                                                "Get_Topics": [ "Succeeded" ]
+                                            },
+                                            "actions": {
+                                                "Compose_Topic_Template": {
+                                                    "type": "Compose",
+                                                    "inputs": {
+                                                        "name": "@item()?['name']",
+                                                        "type": "@item()?['type']",
+                                                        "location": "@item()?['location']",
+                                                        "properties": {
+                                                            "maxSizeInMegabytes": "@item()?['properties']?['maxSizeInMegabytes']",
+                                                            "defaultMessageTimeToLive": "@item()?['properties']?['defaultMessageTimeToLive']",
+                                                            "requiresDuplicateDetection": "@item()?['properties']?['requiresDuplicateDetection']",
+                                                            "duplicateDetectionHistoryTimeWindow": "@item()?['properties']?['duplicateDetectionHistoryTimeWindow']"
+                                                        }
+                                                    }
+                                                },
+                                                "Append_Topic_To_Template": {
+                                                    "type": "AppendToArrayVariable",
+                                                    "runAfter": {
+                                                        "Compose_Topic_Template": [ "Succeeded" ]
+                                                    },
+                                                    "inputs": {
+                                                        "name": "topicsList",
+                                                        "value": "@outputs('Compose_Topic_Template')"
+                                                    }
+                                                }
+                                            }
+                                        },
+
+                                        "Compose_Final_Template": {
+                                            "type": "Compose",
+                                            "runAfter": {
+                                                "Compose_Namespace_Template": [ "Succeeded" ]
+                                            },
+                                            "inputs": {
+                                                "namespace": "@outputs('Compose_Namespace_Template')",
+                                                "queues": "@variables('queuesList')",
+                                                "topics": "@variables('topicsList')",
+                                                "subscriptions": "@variables('subscriptionsList')"
+                                            }
+                                        },
+                                        "Deploy_Backup_Workflow": {
+                                            "type": "Http",
+                                            "runAfter": {
+                                                "Compose_Final_Template": [ "Succeeded" ]
+                                            },
+                                            "inputs": {
+                                                "method": "PUT",
+                                                "uri": "https://management.azure.com/subscriptions/@{parameters('subscriptionId')}/resourceGroups/@{parameters('resourceGroupName')}/providers/Microsoft.Logic/workflows/@{concat(item()['name'], '-backup-delete')}?api-version=2019-05-01",
+                                                "headers": {
+                                                    "Content-Type": "application/json"
+                                                },
+                                                "authentication": {
+                                                    "type": "ManagedServiceIdentity",
+                                                    "identity": "/subscriptions/@{parameters('subscriptionId')}/resourceGroups/@{parameters('resourceGroupName')}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/CloudHiroServiceBusAutoRestart"
+                                                },
+                                                "body": {
+                                                    "location": "[resourceGroup().location]",
+                                                    "identity": {
+                                                        "type": "UserAssigned",
+                                                        "userAssignedIdentities": {
+                                                            "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', 'CloudHiroServiceBusAutoRestart')]": {}
+                                                        }
+                                                    },
+                                                    "properties": {
+                                                        "state": "Enabled",
+                                                        "definition": {
+                                                            "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowDefinition.json#",
+                                                            "triggers": {
+                                                                "Recurrence": {
+                                                                    "type": "Recurrence",
+                                                                    "recurrence": {
+                                                                        "frequency": "Day",
+                                                                        "interval": 1,
+                                                                        "startTime": "@concat(utcNow('yyyy-MM-ddT'), item()?['tags']['cloudhiro-backup-servicebus'], ':00Z')"
+                                                                    }
+                                                                }
+                                                            },
+                                                            "actions": {
+                                                                "Get_Namespace": {
+                                                                    "type": "Http",
+                                                                    "inputs": {
+                                                                        "method": "GET",
+                                                                        "uri": "https://management.azure.com/subscriptions/@{parameters('subscriptionId')}/resourceGroups/@{parameters('resourceGroupName')}/providers/Microsoft.ServiceBus/namespaces/@{item()['name']}?api-version=2021-11-01",
+                                                                        "headers": {
+                                                                            "Content-Type": "application/json"
+                                                                        },
+                                                                        "authentication": {
+                                                                            "type": "ManagedServiceIdentity",
+                                                                            "identity": "/subscriptions/@{parameters('subscriptionId')}/resourceGroups/@{parameters('resourceGroupName')}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/CloudHiroServiceBusAutoRestart"
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

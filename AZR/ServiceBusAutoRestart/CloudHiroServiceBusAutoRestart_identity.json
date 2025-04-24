@@ -1,0 +1,27 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "resources": [
+      {
+        "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+        "apiVersion": "2018-11-30",
+        "name": "CloudHiroServiceBusAutoRestart",
+        "location": "[resourceGroup().location]"
+      },
+      {
+        "type": "Microsoft.Authorization/roleAssignments",
+        "apiVersion": "2022-04-01",
+        "name": "[guid(resourceGroup().id, 'CloudHiroServiceBusAutoRestart', 'Contributor')]",
+        "dependsOn": [
+          "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', 'CloudHiroServiceBusAutoRestart')]"
+        ],
+        "properties": {
+          "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'b24988ac-6180-42a0-ab88-20f7382dd24c')]",
+          "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', 'CloudHiroServiceBusAutoRestart'), '2018-11-30').principalId]",
+          "principalType": "ServicePrincipal",
+          "scope": "[resourceGroup().id]"
+        }
+      }
+    ]
+  }
+  
